@@ -1,0 +1,43 @@
+{
+  "name": "plint",
+  "version": "1.0.0",
+  "description": "rch print rt tcp interface",
+  "main": "dist/index.js",
+  "files": [
+    "dist/**/*.js",
+    "dist/**/*.js.map",
+    "dist/**/*.d.ts"
+  ],
+  "scripts": {
+    "clear": "rm -rf dist/",
+    "test": "jest",
+    "prepack": "npm run clear && npm run compile",
+    "precompile": "npm run clear",
+    "compile": "tsc",
+    "pretest": "npm run compile"
+  },
+  "keywords": [
+    "rch",
+    "print!",
+    "rt"
+  ],
+  "author": "Mattia Castellani",
+  "license": "ISC",
+  "devDependencies": {
+    "@jest/globals": "^29.7.0",
+    "@types/debug": "^4.1.12",
+    "@types/jest": "^29.5.11",
+    "@types/node": "^20.11.15",
+    "ts-jest": "^29.1.2",
+    "ts-node": "^10.9.2",
+    "typescript": "^5.3.3"
+  },
+  "dependencies": {
+    "@abandonware/noble": "^1.9.2-24",
+    "@node-escpos/core": "^0.5.0",
+    "@node-escpos/network-adapter": "^0.0.1",
+    "canvas": "^2.11.2",
+    "debug": "^4.3.4",
+    "node-ble": "^1.10.0"
+  }
+}
