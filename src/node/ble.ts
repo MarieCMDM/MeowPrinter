@@ -1,7 +1,8 @@
 // import noble from "@abandonware/noble";
 import * as ble from 'node-ble'
 import { commandsPrintImg } from "./commands";
-import { CatImage } from "./image";
+// import { CatImage } from "./image";
+import Image from './img';
 import debug_lib, {Debugger} from 'debug';
 
 const POSSIBLE_SERVICE_UUIDS = [
@@ -76,6 +77,7 @@ export class CatPrinter {
                         let chars = await srv.characteristics()
 
                         for (let char of chars) {
+                            console.log(char)
                             const print_char = await srv.getCharacteristic(char)
                             if (char == NOTIFY_CHARACTERISTIC) {
                                 notify_characteristic = print_char
@@ -107,18 +109,21 @@ export class CatPrinter {
     }
 
     public async sendImage(image_path: string, dark_mode?: boolean): Promise<void> {
-        let img: CatImage = await CatImage.loadFromPath(image_path)
-        let data = commandsPrintImg(img, dark_mode=dark_mode)
-        await img.save()
+        // let img: CatImage = await CatImage.loadFromPath(image_path)
+        // let data = commandsPrintImg(img, dark_mode=dark_mode)
+        // await img.save()
+        // return await this.write(data)
+        const image = await Image.load(image_path)
+        let data = commandsPrintImg(image, dark_mode=dark_mode)
         return await this.write(data)
     }
 
-    public async sendText(text: string): Promise<void> {
-        let img: CatImage = await CatImage.drawText(text)
-        let data = commandsPrintImg(img, true)
-        await img.save()
-        return await this.write(data)
-    }
+    // public async sendText(text: string): Promise<void> {
+    //     let img: CatImage = await CatImage.drawText(text)
+    //     let data = commandsPrintImg(img, true)
+    //     await img.save()
+    //     return await this.write(data)
+    // }
 
     public async disconnect(): Promise<void> {
         await this.device?.disconnect()
@@ -132,7 +137,7 @@ export class CatPrinter {
         this.debugger(`⏳ Sending ${data.length} bytes of data in chunks of ${chunk_size} bytes...`)
         
         for (const chunk of (this.chunkify(data, chunk_size))) {
-            this.debugger(`⏳ Sending chunk`)
+            // this.debugger(`⏳ Sending chunk`)
             this.print_characteristic!.writeValueWithoutResponse(Buffer.from(chunk))
             await sleep(WAIT_AFTER_EACH_CHUNK_MS)
         }

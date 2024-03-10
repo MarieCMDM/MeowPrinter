@@ -36,8 +36,11 @@
     "@abandonware/noble": "^1.9.2-24",
     "@node-escpos/core": "^0.5.0",
     "@node-escpos/network-adapter": "^0.0.1",
+    "@types/get-pixels": "^3.3.4",
     "canvas": "^2.11.2",
     "debug": "^4.3.4",
+    "get-pixels": "^3.3.3",
+    "ndarray-resize": "^0.2.0",
     "node-ble": "^1.10.0"
   }
 }

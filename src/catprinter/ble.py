@@ -83,13 +83,11 @@ async def run_ble(data, device: Optional[str]):
         chunk_size = client.mtu_size - 3
         logger.info(
             f'⏳ Sending {len(data)} bytes of data in chunks of {chunk_size} bytes...')
-        logger.info(
-            f'⏳ Sending {(data)} ')
-        # for i, chunk in enumerate(chunkify(data, chunk_size)):
-        #     logger.info(
-        #         f'⏳ Sending {chunk}')
-        #     await client.write_gatt_char(TX_CHARACTERISTIC_UUID, chunk)
-        #     await asyncio.sleep(WAIT_AFTER_EACH_CHUNK_S)
-            # logger.info(f'{chunk}')
+        for i, chunk in enumerate(chunkify(data, chunk_size)):
+            # logger.info(
+            #     f'⏳ Sending {chunk}')
+            await client.write_gatt_char(TX_CHARACTERISTIC_UUID, chunk)
+            await asyncio.sleep(WAIT_AFTER_EACH_CHUNK_S)
+            logger.info(f'{chunk}')
         logger.info(f'✅ Done. Waiting {WAIT_AFTER_DATA_SENT_S}s before disconnecting...')
         await asyncio.sleep(WAIT_AFTER_DATA_SENT_S)

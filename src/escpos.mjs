@@ -1,5 +1,5 @@
-import { Bluetooth } from '../../dist/thermal_printers/bluetooth_adapter.js';
-import { ThermalPrinter } from '../../dist/thermal_printers/esc_pos.js'
+import { Bluetooth } from '../dist/esc_pos/bluetooth_adapter.js'
+import { ThermalPrinter } from '../dist/esc_pos/esc_pos.js'
 //*_________________________________________________________________________________________________________________________________________________________
 const table_header = ["Descrizione", "IVA", "Prezzo"]
 const table_content = [
@@ -12,7 +12,8 @@ const table_content = [
 ]
 
 //*___________________________________________________________________________________________________________________________________________________________
-const adapter = await Bluetooth.create('66:12:19:91:32:64');
+const adapter = await new Bluetooth('66:12:19:91:32:64');
+await adapter.init()
 const printer = new ThermalPrinter(adapter)
 printer.printHeader(["恭喜发财", "small header"])
 // printer.printTable(table_header, table_content, [0.65, 0.15, 0.20])
