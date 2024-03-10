@@ -1,5 +1,4 @@
 import { CatImage } from "./image"
-import Image from './img';
 
 export function toUnsignedByte(val: number): number {
     // Converts a byte in signed representation to unsigned. Assumes val is encoded in two's complement
@@ -88,20 +87,26 @@ export function commandSetEnergy(energy: number): Buffer {
     return bytes_array 
 }
 
-export function commandPrintRow(img_row: number[]): Buffer {
-    const encoded_row = byte_encode(img_row)
+export function commandPrintRow(img_row: Buffer): Buffer {
     let bytes_array: Buffer
-    const img_len = encoded_row.length
+    // const img_len = img_row.length
 
-    bytes_array = Buffer.concat([byteConverter([81, 120, -94, 0, img_len, 0]), byteConverter(encoded_row), byteConverter([0, 0xff])])
-    bytes_array[-2] = calculateCksm(bytes_array, 6, img_len)
+    // bytes_array = Buffer.concat([byteConverter([81, 120, -94, 0, img_len, 0]), img_row, byteConverter([0, 0xff])])
+    // bytes_array[-2] = calculateCksm(bytes_array, 6, img_len)
+    // return bytes_array
+    let line = []
+    for (let i = 0; i<384; i++) {
+        line.push(1)
+    }
+
+    bytes_array = Buffer.concat([byteConverter([81, 120, -94, 0, 384, 0]), byteConverter(line), byteConverter([0, 0xff])])
+    bytes_array[-2] = calculateCksm(bytes_array, 6, 384)
     return bytes_array
 }
 
 
-export function commandsPrintImg(img: Image, dark_mode?: boolean): Buffer {
+export function commandsPrintImg(img: CatImage, dark_mode?: boolean): Buffer {
 
-    console.log("img size: ", img.size)
     let PRINTER_MODE 
     if (dark_mode == true) {
         PRINTER_MODE = CMD_PRINT_TEXT
@@ -110,42 +115,38 @@ export function commandsPrintImg(img: Image, dark_mode?: boolean): Buffer {
     } 
     let data = Buffer.concat([CMD_GET_DEV_STATE, CMD_SET_QUALITY_200_DPI, CMD_LATTICE_START])
     
-    // console.log(img.bitmap)
-    
-    // let image_rows: Buffer[] = img.getRows()
-
-    // console.log(image_rows)
+    let image_rows: Buffer[] = img.getRows()
 
     // for (let row of image_rows) {
     //     data = Buffer.concat([data, commandPrintRow(row)])
     // }
+    // console.log(commandPrintRow(image_rows[0]))
+    // for ( let i of [1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20]) {
+    //     data = Buffer.concat([data, commandPrintRow(image_rows[0])])
+    // }
 
-    const bitmap = img.toBitmap()
-    for (let row of bitmap.data) {
-        data = Buffer.concat([data, commandPrintRow(row)])
-    }
-    data = Buffer.concat([data, commandFeedPaper(10), CMD_SET_PAPER, CMD_SET_PAPER, CMD_SET_PAPER, CMD_LATTICE_END, CMD_GET_DEV_STATE])
-    console.log(data)
+    data = Buffer.concat([data, commandFeedPaper(25), CMD_SET_PAPER, CMD_SET_PAPER, CMD_SET_PAPER, CMD_LATTICE_END, CMD_GET_DEV_STATE])
+    // console.log(data)
     return data
 }
 
 
-export function byte_encode(img_row: number[]) {
-    function bit_encode(chunk_start: number, bit_index: number) {
-        if (img_row[chunk_start + bit_index] != 0) {
-            return 1
-        } else {
-            return 0
-        }
-    }
+// export function byte_encode(img_row: number[]) {
+//     function bit_encode(chunk_start: number, bit_index: number) {
+//         if (img_row[chunk_start + bit_index] != 0) {
+//             return 1
+//         } else {
+//             return 0
+//         }
+//     }
 
-    let res: number[] = []
-    for (let chunk_start = 0; chunk_start < img_row.length; chunk_start += 8) {
-        let byte: number = 0
-        for (let bit_index in [0, 1, 2, 3, 4, 5, 6, 7, 8]) {
-            byte |= bit_encode(chunk_start, Number(bit_index))
-        }
-        res.push(byte)
-    }
-    return res
-}
+//     let res: number[] = []
+//     for (let chunk_start = 0; chunk_start < img_row.length; chunk_start += 8) {
+//         let byte: number = 0
+//         for (let bit_index in [0, 1, 2, 3, 4, 5, 6, 7, 8]) {
+//             byte |= bit_encode(chunk_start, Number(bit_index))
+//         }
+//         res.push(byte)
+//     }
+//     return res
+// }

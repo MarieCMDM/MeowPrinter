@@ -88,6 +88,5 @@ async def run_ble(data, device: Optional[str]):
             #     f'⏳ Sending {chunk}')
             await client.write_gatt_char(TX_CHARACTERISTIC_UUID, chunk)
             await asyncio.sleep(WAIT_AFTER_EACH_CHUNK_S)
-            logger.info(f'{chunk}')
         logger.info(f'✅ Done. Waiting {WAIT_AFTER_DATA_SENT_S}s before disconnecting...')
         await asyncio.sleep(WAIT_AFTER_DATA_SENT_S)

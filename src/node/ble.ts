@@ -1,8 +1,7 @@
 // import noble from "@abandonware/noble";
 import * as ble from 'node-ble'
 import { commandsPrintImg } from "./commands";
-// import { CatImage } from "./image";
-import Image from './img';
+import { CatImage } from "./image";
 import debug_lib, {Debugger} from 'debug';
 
 const POSSIBLE_SERVICE_UUIDS = [
@@ -77,13 +76,11 @@ export class CatPrinter {
                         let chars = await srv.characteristics()
 
                         for (let char of chars) {
-                            console.log(char)
                             const print_char = await srv.getCharacteristic(char)
                             if (char == NOTIFY_CHARACTERISTIC) {
                                 notify_characteristic = print_char
                             }
                             if (char == PRINT_CHARACTERISTIC) {
-                                console.log(await print_char.getFlags())
                                 printer_characteristic = print_char
                             }
                         }
@@ -109,13 +106,13 @@ export class CatPrinter {
     }
 
     public async sendImage(image_path: string, dark_mode?: boolean): Promise<void> {
-        // let img: CatImage = await CatImage.loadFromPath(image_path)
-        // let data = commandsPrintImg(img, dark_mode=dark_mode)
-        // await img.save()
-        // return await this.write(data)
-        const image = await Image.load(image_path)
-        let data = commandsPrintImg(image, dark_mode=dark_mode)
+        let img: CatImage = await CatImage.loadFromPath(image_path)
+        let data = commandsPrintImg(img, dark_mode=dark_mode)
+        await img.save()
         return await this.write(data)
+        // const image = await Image.load(image_path)
+        // let data = commandsPrintImg(image, dark_mode=dark_mode)
+        // return await this.write(data)
     }
 
     // public async sendText(text: string): Promise<void> {
