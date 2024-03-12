@@ -40,6 +40,7 @@
     "canvas": "^2.11.2",
     "debug": "^4.3.4",
     "get-pixels": "^3.3.3",
+    "jimp": "^0.22.12",
     "ndarray-resize": "^0.2.0",
     "node-ble": "^1.10.0"
   }

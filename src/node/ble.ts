@@ -1,6 +1,5 @@
-// import noble from "@abandonware/noble";
 import * as ble from 'node-ble'
-import { CatImage, PRINT_WIDTH } from "./image";
+import { CatImage} from "./image";
 import debug_lib, {Debugger} from 'debug';
 import * as cmd from './commands';
 
@@ -13,12 +12,12 @@ const PRINT_CHARACTERISTIC = "0000ae01-0000-1000-8000-00805f9b34fb"
 const NOTIFY_CHARACTERISTIC = "0000ae02-0000-1000-8000-00805f9b34fb"
 
 // Wait time after sending each chunk of data through BLE.
-const WAIT_AFTER_EACH_CHUNK_MS = 2
+const WAIT_AFTER_EACH_CHUNK_MS = 20
 
 // This is a hacky solution so we don't terminate the BLE connection to the printer
 // while it's still printing. A better solution is to subscribe to the RX characteristic
 // and listen for printer events, so we know exactly when the printing is finished.
-const WAIT_AFTER_DATA_SENT_MS = 30000
+const WAIT_AFTER_DATA_SENT_MS = 20000
 
 const {bluetooth, destroy} = ble.createBluetooth()
 
@@ -104,66 +103,22 @@ export class CatPrinter {
         })
     }
 
-    private async _printImage(cat_image: CatImage, dark_mode: boolean): Promise<void> {
-        const image = cat_image.imageData
-        // Set energy used to a moderate level
-        await this.write(cmd.formatMessage(cmd.SetEnergy, [0x10, 0x00]))
-        // Set print quality to high
-        await this.write(cmd.formatMessage(cmd.SetQuality, [5]))
-        // Set mode
-        if (dark_mode ) {
-            await this.write(cmd.formatMessage(cmd.DrawingMode, [1]))
-        } else {
-            await this.write(cmd.formatMessage(cmd.DrawingMode, [0]))
-        }
-
-        for (let y = 0; y < image.height; y++) { 
-            let bmp: number[] = []
-            let bit: number = 0
-            // Turn RGBA8 line into 1bpp
-            for (let x = 0; x< image.width; x++) {
-                if ((bit % 8) == 0) {
-                    bmp.push(0x00)
-                }
-                const redComponent = image.data[y * (image.width * 4) + x * 4 + 0];
-                const greenComponent = image.data[y * (image.width * 4) + x * 4 + 1];
-                const blueComponent = image.data[y * (image.width * 4) + x * 4 + 2];
-                const alphaComponent = image.data[y * (image.width * 4) + x * 4 + 3];
-                
-                bmp[Number(bit / 8)] >>= 1
-                if (redComponent < 0x80 && greenComponent < 0x80 && blueComponent < 0x80 && alphaComponent > 0x80) {
-                    bmp[Number(bit / 8)] |= 0x80
-                } else {
-                    bmp[Number(bit / 8)] |= 0
-                }
-                bit += 1
-            }
-            // Draw line
-            console.log(bmp)
-            await this.write(cmd.formatMessage(cmd.DrawBitmap, bmp))
-            // Advance line one step
-            await this.write(cmd.formatMessage(cmd.FeedPaper, [0, 1]))
-            // Wait a bit to prevent printer from getting jammed. This can be fixed by sending compressed data like the app does. However I did not yet RE this.
-            await sleep(WAIT_AFTER_EACH_CHUNK_MS)
-        }
-        this.debugger(`✅ Done. Waiting ${WAIT_AFTER_DATA_SENT_MS}s before disconnecting...`)
-        await sleep(WAIT_AFTER_DATA_SENT_MS)
-
+    public async sendImage(image_path: string, dark_mode?: boolean): Promise<void> {
+        let img: CatImage = await CatImage.loadFromPath(image_path)
+        //!
+        img.save()
+        //!
+        let data = await cmd.commandsPrintImg(img, dark_mode=dark_mode)
+        await this.write(data)
         return
     }
 
-    public async sendImage(image_path: string, dark_mode?: boolean): Promise<void> {
-        let img: CatImage = await CatImage.loadFromPath(image_path)
-        // await img.save()
-        return this._printImage(img, false)
-       
-    }
 
-    public async sendText(text: string): Promise<void> {
-        let img: CatImage = await CatImage.drawText(text)
-        await img.save()
-        return this._printImage(img, false)
-    }
+    // public async sendText(text: string): Promise<void> {
+    //     let img: CatImage = await CatImage.drawText(text)
+    //     let data = await cmd.commandsPrintImg(img, true)
+    //     return await this.write(data)
+    // }
 
     public async disconnect(): Promise<void> {
         await this.device?.disconnect()
@@ -173,14 +128,15 @@ export class CatPrinter {
     }
 
     private async write(data: number[]): Promise<void> {
-        const chunk_size = 20//this.device!.mtu! - 3
+        const chunk_size = 20
         this.debugger(`⏳ Sending ${data.length} bytes of data in chunks of ${chunk_size} bytes...`)
         
         for (const chunk of (this.chunkify(data, chunk_size))) {
             this.print_characteristic!.writeValueWithoutResponse(Buffer.from(chunk))
             await sleep(WAIT_AFTER_EACH_CHUNK_MS)
         }
-
+        this.debugger(`✅ Done. Waiting ${WAIT_AFTER_DATA_SENT_MS}s before disconnecting...`)
+        await sleep(WAIT_AFTER_DATA_SENT_MS)
         return
     }
 
