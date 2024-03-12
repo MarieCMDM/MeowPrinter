@@ -106,7 +106,7 @@ export class CatPrinter {
     public async sendImage(image_path: string, dark_mode?: boolean): Promise<void> {
         let img: CatImage = await CatImage.loadFromPath(image_path)
         //!
-        img.save()
+        // await img.save()
         //!
         let data = await cmd.commandsPrintImg(img, dark_mode=dark_mode)
         await this.write(data)
@@ -132,7 +132,7 @@ export class CatPrinter {
         this.debugger(`⏳ Sending ${data.length} bytes of data in chunks of ${chunk_size} bytes...`)
         
         for (const chunk of (this.chunkify(data, chunk_size))) {
-            this.print_characteristic!.writeValueWithoutResponse(Buffer.from(chunk))
+            // this.print_characteristic!.writeValueWithoutResponse(Buffer.from(chunk))
             await sleep(WAIT_AFTER_EACH_CHUNK_MS)
         }
         this.debugger(`✅ Done. Waiting ${WAIT_AFTER_DATA_SENT_MS}s before disconnecting...`)

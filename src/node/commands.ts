@@ -109,12 +109,13 @@ export async function commandsPrintImg(img: CatImage, dark_mode?: boolean): Prom
     } 
 
     let data = CMD_GET_DEV_STATE.concat(CMD_SET_QUALITY_200_DPI, CMD_LATTICE_START)
-    let image_rows: number[][] = img.getRows()
+    let image_rows: number[][] = await img.getRows()
     for (let row of image_rows) {
         let command_print_row = await commandPrintRow(row)
         data = data.concat(command_print_row)
     }
     data = data.concat(commandFeedPaper(25), CMD_SET_PAPER, CMD_SET_PAPER, CMD_SET_PAPER, CMD_LATTICE_END, CMD_GET_DEV_STATE)
+
     return data
 }
 

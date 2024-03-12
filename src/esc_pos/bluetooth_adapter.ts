@@ -56,7 +56,6 @@ export class Bluetooth extends Adapter<[timeout?: number]> {
               let chars = await srv.characteristics()
 
               for (let char of chars) {
-                console.log(char)
                   const print_char = await srv.getCharacteristic(char)
                   if (char == PRINT_CHARACTERISTIC) {
                       printer_characteristic = print_char

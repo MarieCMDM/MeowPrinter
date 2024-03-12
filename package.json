@@ -37,6 +37,8 @@
     "@node-escpos/core": "^0.5.0",
     "@node-escpos/network-adapter": "^0.0.1",
     "@types/get-pixels": "^3.3.4",
+    "@types/jimp": "^0.2.28",
+    "@wokwi/bmp-ts": "^3.0.0",
     "canvas": "^2.11.2",
     "debug": "^4.3.4",
     "get-pixels": "^3.3.3",

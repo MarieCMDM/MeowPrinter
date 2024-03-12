@@ -1,140 +1,108 @@
-import { ImageData, createCanvas, loadImage, registerFont, Image } from 'canvas'
+import Jimp from 'jimp'
 import * as fs from 'fs/promises'
 
 export const PRINT_WIDTH = 384
 
 export class CatImage {
-    private constructor(private buff: Buffer, public imageData: ImageData) { }
+    private constructor(private image: Jimp, public binarized: number[]) { }
 
-    static async drawText(input: string): Promise<CatImage> {
-        registerFont('/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf', { family: 'DejaVu Sans' })
+    // static async drawText(input: string): Promise<CatImage> {
+    //     registerFont('/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf', { family: 'DejaVu Sans' })
 
-        const canvas = createCanvas(PRINT_WIDTH, 256)
-        const ctx = canvas.getContext('2d')
-        ctx.font = '12px DejaVuSans.ttf'
-        ctx.fillText(input, 10, 190)
+    //     const canvas = createCanvas(PRINT_WIDTH, 256)
+    //     const ctx = canvas.getContext('2d')
+    //     ctx.font = '12px DejaVuSans.ttf'
+    //     ctx.fillText(input, 10, 190)
 
-        const imgData: ImageData = ctx.getImageData(0, 0, PRINT_WIDTH, 256)
-        const data = imgData.data
+    //     const imgData: ImageData = ctx.getImageData(0, 0, PRINT_WIDTH, 256)
+    //     const data = imgData.data
 
-        for (let i = 0; i < ImageData.length; i += 4) {
-            const avg = (data[i] + data[i + 1] + data[i + 2])
-            data[i] = avg
-            data[i + 1] = avg
-            data[i + 2] = avg
-        }
+    //     for (let i = 0; i < ImageData.length; i += 4) {
+    //         const avg = (data[i] + data[i + 1] + data[i + 2])
+    //         data[i] = avg
+    //         data[i + 1] = avg
+    //         data[i + 2] = avg
+    //     }
 
-        ctx.putImageData(imgData, 0, 0)
-        const new_imgData = ctx.getImageData(0, 0, PRINT_WIDTH, 256)
-        const buff: Buffer = canvas.toBuffer()
-        return new CatImage(buff, new_imgData)
-    }
+    //     ctx.putImageData(imgData, 0, 0)
+    //     const new_imgData = ctx.getImageData(0, 0, PRINT_WIDTH, 256)
+    //     const buff: Buffer = canvas.toBuffer()
+    //     return new CatImage(buff, new_imgData)
+    // }
 
     static async loadFromPath(path: string): Promise<CatImage> {
-        const myimg: Image = await loadImage(path)
-    
-        const height = myimg.height
-        const width = myimg.width
-        const factor = PRINT_WIDTH / width
-        const PRINT_HEIGHT = Math.floor((height * factor))
-        const canvas = createCanvas(PRINT_WIDTH, PRINT_HEIGHT)
-        const ctx = canvas.getContext('2d')
+        const myimg: Jimp = await Jimp.read(path)
         // resize
-        ctx.drawImage(myimg, 0, 0, PRINT_WIDTH, PRINT_HEIGHT)
-        const imageData = ctx.getImageData(0, 0, PRINT_WIDTH, PRINT_HEIGHT)
+        myimg.resize(PRINT_WIDTH, Jimp.AUTO)
 
         // grayscale
-        const data = imageData.data;
-        for (let i = 0; i < data.length; i += 4) {
-            const avg = (data[i] + data[i + 1] + data[i + 2]) / 3;
-            data[i] = avg; // red
-            data[i + 1] = avg; // green
-            data[i + 2] = avg; // blue
-        }
+        myimg.grayscale()
 
-        ctx.putImageData(imageData, 0, 0);
+        myimg.contrast(0.8)
 
-        const png_converter = canvas.toDataURL("image/png")
-        const png = await loadImage(png_converter)
 
-        ctx.drawImage(png, 0, 0, PRINT_WIDTH, PRINT_HEIGHT)
-        const pngimageData = ctx.getImageData(0, 0, PRINT_WIDTH, PRINT_HEIGHT)
-        ctx.putImageData(pngimageData, 0, 0);
-
-        const binarized = floydsteinberg(pngimageData)
-
-        fs.writeFile('img_btm.txt', '')
-        for (let r=0; r < (PRINT_HEIGHT+PRINT_WIDTH); r++) {
-            for (let c=0; c < PRINT_WIDTH; c++ ) {
-                if( binarized.data[r] == 255) {
-                    fs.appendFile('img_btm.txt', '1')
-                } else {
-                    fs.appendFile('img_btm.txt', '0')
-                }  
+        // await fs.writeFile('original.txt', '')
+        let index = 0
+        let buf = myimg.bitmap.data
+        for (let r = 0; r < myimg.bitmap.height; r++) {
+            for (let col = 0; col < PRINT_WIDTH; col++) {
+                // await fs.appendFile('original.txt', String(buf[index]).padStart(3, '0'))
+                index++
             }
-            fs.appendFile('img_btm.txt', '\n')
+            // await fs.appendFile('original.txt', '\n')
         }
 
-        // console.log(binarized)
-        ctx.putImageData(binarized, 0, 0);
-
-        // invert
-        // const data = binarized.data;
-        // for (let i = 0; i < data.length; i++) {
-        //     if (data[i] == 255) {
-        //         data[i] = 0 
-        //     } else {
-        //         data[i] = 255
-        //     }
-        // }
-        // ctx.putImageData(binarized, 0, 0);
-
-
-        const buff: Buffer = canvas.toBuffer()
-        return new CatImage(buff, binarized)
+        await myimg.write('myimg.png')
+        const binarized = await getBitmapArray(myimg)
+        return new CatImage(myimg, binarized)
     }
 
-    public getRows(): number[][] {
+    public async getRows(): Promise<number[][]> {
+        // await fs.writeFile('bin.txt', '')
         const rows: number[][] = []
-        let pixel: number = 0
-        for (let line = 0; line < this.imageData.height; line += 1) {
+        let index = 0
+        for (let r = 0; r < this.image.bitmap.height; r++) {
             const row: number[] = []
             for (let col = 0; col < PRINT_WIDTH; col++) {
-                row.push(this.imageData.data[pixel])
-                pixel++
+                // await fs.appendFile('bin.txt', String(this.binarized[index]))
+                row.push(this.binarized[index])
+                index++
             }
+            // await fs.appendFile('bin.txt', '\n')
             rows.push(row)
         }
+        console.log(rows.length, rows[0].length)
+        console.log(py_img.length, py_img[0].length)
         return rows
+        // return py_img
     }
 
     public async save(): Promise<void> {
-        await fs.writeFile('./img.png', this.buff)
+        await this.image.writeAsync('bitmap.bmp')
         return
     }
 }
 
-function floydsteinberg(image: ImageData) {
-    const width = image.width
-    const luminance = new Uint8ClampedArray(image.width * image.height)
+function getBitmapArray(image: Jimp): number[] {
+    console.log(image.bitmap.data.length)
 
-    for (let l = 0, i = 0; i < image.data.length; l++, i += 4) {
-        luminance[l] = (image.data[i] * 0.299) + (image.data[i + 1] * 0.587) + (image.data[i + 2] * 0.114)
-    }
+    const bitmapArray: number[] = [];
+    image.scan(0, 0, image.bitmap.width, image.bitmap.height, (x, y, idx) => {
+        // Extract the red channel value (0 or 255 for 1-bit)
+        const redValue = image.bitmap.data[idx]
+        const greenValue = image.bitmap.data[idx + 1]
+        const blueValue = image.bitmap.data[idx + 2]
+        const alphaValue = image.bitmap.data[idx + 3]
+        const lightness = ((redValue +greenValue + blueValue + alphaValue) / 4)
+        bitmapArray.push(lightness > 127? 1 : 0);
+        bitmapArray.push(lightness > 127? 1 : 0);
+        bitmapArray.push(lightness > 127? 1 : 0);
+        bitmapArray.push(lightness > 127? 1 : 0);
+    });
 
-    for (let l = 0, i = 0; i < image.data.length; l++, i += 4) {
-        const value = luminance[l] < 129 ? 0 : 255
-        const error = Math.floor((luminance[l] - value) / 16)
-        image.data.fill(value, i, i + 3)
-
-        luminance[l + 1] += error * 7
-        luminance[l + width - 1] += error * 3
-        luminance[l + width] += error * 5
-        luminance[l + width + 1] += error * 1
-    }
-    return image;
+    console.log(bitmapArray.length)
+    return bitmapArray
 }
-
 
 const py_img: number[][] = [
     [1, 0, 1, 1, 1, 1, 1, 1, 1, 0, 1, 0, 1, 1, 1, 1, 1, 1, 1, 1, 0, 1, 0, 1, 1, 1, 1, 0, 1, 1, 1, 0, 1, 0, 1, 1, 1, 0, 1, 0, 1, 1, 0, 1, 0, 1, 1, 1, 0, 1, 1, 0, 1, 1, 0, 1, 0, 1, 1, 0, 1, 1, 0, 1, 1, 0, 1, 0, 1, 1, 0, 1, 1, 0, 1, 1, 0, 1, 0, 1, 1, 0, 1, 1, 0, 1, 1, 0, 1, 0, 1, 1, 0, 1, 1, 0, 1, 1, 0, 1, 0, 1, 1, 0, 1, 1, 0, 1, 1, 0, 1, 0, 1, 1, 0, 1, 1, 0, 1, 0, 1, 0, 1, 0, 1, 1, 0, 1, 1, 0, 1, 1, 0, 1, 0, 1, 1, 0, 1, 1, 1, 0, 1, 1, 0, 1, 1, 0, 1, 1, 1, 0, 1, 1, 1, 0, 1, 1, 0, 1, 1, 1, 1, 0, 1, 1, 0, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 0, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 0, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 0, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 0, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 0, 1, 1, 1, 1, 1, 1, 1, 0, 1, 1, 1, 0, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 0, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 0, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 0, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 0, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 0, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 0, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1],
