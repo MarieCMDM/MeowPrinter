@@ -1,35 +1,44 @@
 import * as ble from 'node-ble'
-import { CatImage} from "./image";
+import { PrinterData } from "./cat_image";
 import debug_lib, {Debugger} from 'debug';
-import * as cmd from './commands_old';
+import { Commander } from './cat_commands.';
 
-const POSSIBLE_SERVICE_UUIDS = [
-    '0000ae30-0000-1000-8000-00805f9b34fb',
-    '0000af30-0000-1000-8000-00805f9b34fb',
-]
+import * as fs from 'fs/promises'
 
-const PRINT_CHARACTERISTIC = "0000ae01-0000-1000-8000-00805f9b34fb"
-const NOTIFY_CHARACTERISTIC = "0000ae02-0000-1000-8000-00805f9b34fb"
+export interface PrinterState {
+    out_of_paper: number;
+    cover: number;
+    overheat: number;
+    low_power: number;
+    pause: number;
+    busy: number;
+}
 
-// Wait time after sending each chunk of data through BLE.
-const WAIT_AFTER_EACH_CHUNK_MS = 20
-
-// This is a hacky solution so we don't terminate the BLE connection to the printer
-// while it's still printing. A better solution is to subscribe to the RX characteristic
-// and listen for printer events, so we know exactly when the printing is finished.
-const WAIT_AFTER_DATA_SENT_MS = 20000
-
+export enum StateFlag {
+    out_of_paper = 1 << 0,
+    cover = 1 << 1,
+    overheat = 1 << 2,
+    low_power = 1 << 3,
+    pause = 1 << 4,
+    busy = 0x80,
+}
 const {bluetooth, destroy} = ble.createBluetooth()
 
 const sleep = (ms: number) => new Promise(accept => setTimeout(accept, ms));
 
-export class BlePrinter {
+export class CatPrinter extends Commander {
     public debugger: Debugger
     public device: ble.Device | undefined
     public print_characteristic: ble.GattCharacteristic | undefined
     public notify_characteristic: ble.GattCharacteristic | undefined
+    private PRINT_WIDTH = 384
+    private PRINT_CHARACTERISTIC = "0000ae01-0000-1000-8000-00805f9b34fb"
+    private NOTIFY_CHARACTERISTIC = "0000ae02-0000-1000-8000-00805f9b34fb"
+    private  WAIT_AFTER_EACH_CHUNK_MS = 20
+    private  WAIT_AFTER_DATA_SENT_MS = 20000
 
     private constructor() {
+        super()
         this.debugger = debug_lib('cat')
     }
 
@@ -75,10 +84,10 @@ export class BlePrinter {
 
                         for (let char of chars) {
                             const print_char = await srv.getCharacteristic(char)
-                            if (char == NOTIFY_CHARACTERISTIC) {
+                            if (char == this.NOTIFY_CHARACTERISTIC) {
                                 notify_characteristic = print_char
                             }
-                            if (char == PRINT_CHARACTERISTIC) {
+                            if (char == this.PRINT_CHARACTERISTIC) {
                                 printer_characteristic = print_char
                             }
                         }
@@ -103,48 +112,69 @@ export class BlePrinter {
         })
     }
 
-    public async sendImage(image_path: string, dark_mode?: boolean): Promise<void> {
-        let img: CatImage = await CatImage.loadFromPath(image_path)
-        //!
-        // await img.save()
-        //!
-        let data = await cmd.commandsPrintImg(img, dark_mode=dark_mode)
-        await this.write(data)
-        return
+    private  async printImage(printer_data: PrinterData): Promise<void> {
+        await fs.writeFile('print.txt', '[')
+        // flip(data.data, data.width, data.height, self.flip_h, self.flip_v, overwrite=True)
+        await this.prepare(34, 48000)
+        // TODO: consider compression on new devices
+        const rows = await printer_data.read(Math.floor(this.PRINT_WIDTH / 8))
+        for (let chunk of rows) {
+            await fs.appendFile('print.txt', `${chunk} \n`)
+            this.drawBitmap(chunk)
+        }
+        this.finish(100)
+    }
+
+    public async print(data: string, mode: string): Promise<void> {
+        if (mode == 'text') {
+            return this.printText(data)
+        } else {
+            const image: PrinterData = await PrinterData.loadImage(data)
+            return this.printImage(image)
+        }
     }
 
 
-    // public async sendText(text: string): Promise<void> {
-    //     let img: CatImage = await CatImage.drawText(text)
-    //     let data = await cmd.commandsPrintImg(img, true)
-    //     return await this.write(data)
-    // }
+    private async printText(text: string): Promise<void> {
+        //TODO
+        // let img: CatImage = await CatImage.drawText(text)
+        // let data = await cmd.commandsPrintImg(img, true)
+        // return await this.write(data)
+        return
+    }
 
     public async disconnect(): Promise<void> {
+        await sleep(this.WAIT_AFTER_DATA_SENT_MS)
         await this.device?.disconnect()
         this.debugger(`⏳ Disconnecting from the printer...`)
         destroy()
         return
     }
 
-    private async write(data: number[]): Promise<void> {
-        const chunk_size = 20
-        this.debugger(`⏳ Sending ${data.length} bytes of data in chunks of ${chunk_size} bytes...`)
-        
-        for (const chunk of (this.chunkify(data, chunk_size))) {
-            await this.print_characteristic!.writeValueWithoutResponse(Buffer.from(chunk))
-            await sleep(WAIT_AFTER_EACH_CHUNK_MS)
-        }
-        this.debugger(`✅ Done. Waiting ${WAIT_AFTER_DATA_SENT_MS}s before disconnecting...`)
-        await sleep(WAIT_AFTER_DATA_SENT_MS)
+    async send(data: Uint8Array): Promise<void> {
+        this.debugger(`⏳ Sending ${data.length} bytes of data...`)
+        await this.print_characteristic!.writeValueWithoutResponse(Buffer.from(data))
+        await sleep(this.WAIT_AFTER_EACH_CHUNK_MS)
         return
     }
+    // async send(data: Uint8Array): Promise<void> {
+    //     const chunk_size = 20
+    //     this.debugger(`⏳ Sending ${data.length} bytes of data in chunks of ${chunk_size} bytes...`)
+        
+    //     for (const chunk of (this.chunkify(data, chunk_size))) {
+    //         await this.print_characteristic!.writeValueWithoutResponse(Buffer.from(chunk))
+    //         await sleep(this.WAIT_AFTER_EACH_CHUNK_MS)
+    //     }
+    //     // this.debugger(`✅ Done. Waiting ${WAIT_AFTER_DATA_SENT_MS}s before disconnecting...`)
+    //     // await sleep(WAIT_AFTER_DATA_SENT_MS)
+    //     return
+    // }
 
-    private chunkify(data: number[], chunk_size: number): number[][] {
-        const chunks: number[][] = []
-        for (let i = 0; i < data.length; i += chunk_size) {
-            chunks.push(data.slice(i, i + chunk_size))
-        }
-        return chunks
-    }
+    // private chunkify(data: Uint8Array, chunk_size: number): Uint8Array[] {
+    //     const chunks: Uint8Array[] = []
+    //     for (let i = 0; i < data.length; i += chunk_size) {
+    //         chunks.push(data.slice(i, i + chunk_size))
+    //     }
+    //     return chunks
+    // }
 }

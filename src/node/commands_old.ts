@@ -108,7 +108,7 @@ export async function commandsPrintImg(img: CatImage, dark_mode?: boolean): Prom
         PRINTER_MODE = CMD_PRINT_IMG
     } 
 
-    let data = CMD_GET_DEV_STATE.concat(CMD_SET_QUALITY_200_DPI, CMD_LATTICE_START)
+    let data = CMD_GET_DEV_STATE.concat(CMD_SET_QUALITY_200_DPI, PRINTER_MODE, commandSetEnergy(48000), CMD_LATTICE_START)
     let image_rows: number[][] = await img.getRows()
     for (let row of image_rows) {
         let command_print_row = await commandPrintRow(row)
