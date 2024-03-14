@@ -32,10 +32,9 @@ function crc8(data: Uint8Array) {
 }
 
 function reverseBits(i: number) {
-    // i = ((i & 0b10101010) >> 1) | ((i & 0b01010101) << 1);
-    // i = ((i & 0b11001100) >> 2) | ((i & 0b00110011) << 2);
-    // return ((i & 0b11110000) >> 4) | ((i & 0b00001111) << 4);
-    return i
+    i = ((i & 0b10101010) >> 1) | ((i & 0b01010101) << 1);
+    i = ((i & 0b11001100) >> 2) | ((i & 0b00110011) << 2);
+    return ((i & 0b11110000) >> 4) | ((i & 0b00001111) << 4);
 }
 
 function bytes(i: number, length?: number, big_endian?: boolean) {
@@ -80,7 +79,7 @@ export abstract class Commander {
 
     abstract send(data: Uint8Array): Promise<void>
 
-    makeCommand(command: Command, payload: Uint8Array, type: CommandType = CommandType.Transfer) {
+    private makeCommand(command: Command, payload: Uint8Array, type: CommandType = CommandType.Transfer) {
         const payload_size = payload.length
         if (payload_size > 0xff) {
             throw new Error(`Command payload too big (${payload_size} > 255)`)
@@ -107,6 +106,7 @@ export abstract class Commander {
 
     drawBitmap(line: Uint8Array) {
         return this.draw(line.map(reverseBits))
+        // return this.send(this.makeCommand(Command.Bitmap, line))
     }
 
     applyEnergy() {

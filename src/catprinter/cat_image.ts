@@ -1,27 +1,41 @@
 import Jimp from 'jimp'
-import * as fs from 'fs/promises'
 
 export const PRINT_WIDTH = 384
 
 async function getBitmapArray(image: Jimp): Promise<Uint8Array> {
-    await fs.writeFile('bin.txt', '[')
-    const bitmapArray: number[] = []
+    const bitmapArray = []
     let buf = image.bitmap.data
     let index = 0
+
     for (let r = 0; r < image.bitmap.height; r++) {
         for (let col = 0; col < image.bitmap.width; col++) {
-            if (buf[index] > 127) {
-                await fs.appendFile('bin.txt', "255, ")
-                bitmapArray.push(255)
-            } else {
-                await fs.appendFile('bin.txt', "0, ")
+            const luminance = (( buf[index] + buf[index + 1] + buf[index + 2] ) / 3)
+            if (luminance < 127) {
                 bitmapArray.push(0)
+            } else {
+                bitmapArray.push(1)
             }
             index += 4
         }
-        await fs.appendFile('bin.txt', '],\n[')
     }
-    return new Uint8Array(bitmapArray)
+
+    let bitmap = []
+    for (let index = 0; index < bitmapArray.length; index += 8) {
+        let binary_rep = ''
+        binary_rep += String(bitmapArray[index])
+        binary_rep += String(bitmapArray[index + 1])
+        binary_rep += String(bitmapArray[index + 2])
+        binary_rep += String(bitmapArray[index + 3])
+        binary_rep += String(bitmapArray[index + 4])
+        binary_rep += String(bitmapArray[index + 5])
+        binary_rep += String(bitmapArray[index + 6])
+        binary_rep += String(bitmapArray[index + 7])
+
+        const byte = parseInt(binary_rep, 2)
+        bitmap.push(byte)
+    }
+
+    return new Uint8Array(bitmap)
 }
 
 
@@ -55,31 +69,19 @@ export class PrinterData {
 
     static async loadImage(file_path: string): Promise<PrinterData> {
         const image: Jimp = await Jimp.read(file_path)
+        const factor: number = PRINT_WIDTH / image.bitmap.width 
         // Convert image to a monochrome bitmap and store in data
         await image.grayscale()
         // Resize 
-        await image.resize(PRINT_WIDTH / 8, 400)
+        await image.resize(PRINT_WIDTH, image.bitmap.height * factor)
         // invert
         await image.invert()
         await image.write('myimg.png')
+
         const binarized = await getBitmapArray(image)
 
-        let buffer: Buffer = await image.getBufferAsync(Jimp.MIME_BMP)
         return new PrinterData(image.bitmap.width, binarized)
     }
-
-    //   write(dataBuffer) {
-    //     if (this.data.length + dataBuffer.length > this.maxSize) {
-    //       this.full = true;
-    //       this.data = []; // Overwrite earliest data
-    //     }
-    //     this.data.push(...dataBuffer);
-    //     const position = this.data.length;
-    //     if (!this.full) {
-    //       this.height = Math.floor(position / this.dataWidth);
-    //     }
-    //     return position;
-    //   }
 
     *read(length = -1) {
         let position = 0;
@@ -89,46 +91,34 @@ export class PrinterData {
             position += chunkLength;
         }
     }
+
+    static async drawText(text: string): Promise<PrinterData> {
+        const width = PRINT_WIDTH
+        const backgroundColor = 0xFFFFFFFF 
+
+        // Set font properties (you can load custom fonts as well)
+        const font = await Jimp.loadFont(Jimp.FONT_SANS_32_BLACK)
+        const textHeight = Jimp.measureTextHeight(font, text, PRINT_WIDTH)
+
+        const image = await new Jimp(width, textHeight, backgroundColor)
+
+        // Print the text on the image
+        const x = 10
+        const y = 10
+        image.print(font, x, y, { text, alignmentX: Jimp.HORIZONTAL_ALIGN_LEFT })
+
+        const factor: number = PRINT_WIDTH / image.bitmap.width 
+        await image.resize(PRINT_WIDTH, image.bitmap.height * factor)
+        // invert
+        await image.invert()
+        await image.write('myimg.png')
+
+        const binarized = await getBitmapArray(image)
+
+        // Save the image to the specified output path
+        // await image.writeAsync('./textimg.png')
+
+        return new PrinterData(image.bitmap.width, binarized)
+    }
+
 }
-
-// function flip(buffer: Buffer, width: number, height: number, horizontally: boolean = false, vertically: boolean = true, overwrite: boolean = false): Buffer {
-//     // Flip the bitmap data
-//     buffer.fill(0); // Reset buffer position
-//     if (!horizontally && !vertically) {
-//         return buffer;
-//     }
-//     const dataWidth: number = width >> 3;
-//     let result0: Buffer = Buffer.alloc(dataWidth * height);
-//     if (horizontally) {
-//         for (let i = 0; i < height; i++) {
-//             let row = Buffer.from(buffer.slice(i * dataWidth, (i + 1) * dataWidth));
-//             row = row.map(reverseBits);
-//             row.reverse();
-//             result0.set(row, i * dataWidth);
-//         }
-//     } else {
-//         result0 = Buffer.from(buffer);
-//     }
-//     let result1: Buffer = Buffer.alloc(dataWidth * height);
-//     if (vertically) {
-//         for (let i = 0; i < height; i++) {
-//             let row = result0.slice(i * dataWidth, (i + 1) * dataWidth);
-//             result1.set(row, (height - i - 1) * dataWidth);
-//         }
-//     } else {
-//         result1 = result0;
-//     }
-//     if (overwrite) {
-//         buffer.set(result1);
-//     }
-//     return result1;
-// }
-
-// function reverseBits(byte: number): number {
-//     let result: number = 0;
-//     for (let i = 0; i < 8; i++) {
-//         result = (result << 1) | (byte & 1);
-//         byte >>= 1;
-//     }
-//     return result;
-// }

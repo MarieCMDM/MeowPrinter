@@ -114,35 +114,28 @@ export class CatPrinter extends Commander {
         })
     }
 
-    private  async printImage(printer_data: PrinterData): Promise<void> {
-        await fs.writeFile('print.txt', '')
-        await this.prepare(34, 48000)
+    private async print(printer_data: PrinterData): Promise<void> {
+        // await fs.writeFile('print.txt', '')
+        await this.prepare(34, 65000)
         // TODO: consider compression on new devices
         const rows = await printer_data.read(Math.floor(this.PRINT_WIDTH / 8))
         for (let row of rows) {
-            await fs.appendFile('print.txt', `${row} \n`)
+            // await fs.appendFile('print.txt', `${row} \n`)
             this.drawBitmap(row)
         }
         this.finish(100)
     }
 
-    public async print(data: string, mode: string): Promise<void> {
-        if (mode == 'text') {
-            return this.printText(data)
-        } else {
-            const image: PrinterData = await PrinterData.loadImage(data)
-            return this.printImage(image)
-        }
+    public async printImage(path: string): Promise<void> {
+        const image: PrinterData = await PrinterData.loadImage(path)
+        return this.print(image)
     }
 
-
-    private async printText(text: string): Promise<void> {
-        //TODO
-        // let img: CatImage = await CatImage.drawText(text)
-        // let data = await cmd.commandsPrintImg(img, true)
-        // return await this.write(data)
-        return
+    public async printText(text: string): Promise<void> {
+        const image: PrinterData = await PrinterData.drawText(text)
+        return this.print(image)
     }
+
 
     public async disconnect(): Promise<void> {
         await sleep(this.WAIT_AFTER_DATA_SENT_MS)
@@ -155,7 +148,7 @@ export class CatPrinter extends Commander {
     async send(data: Uint8Array): Promise<void> {
         this.debugger(`⏳ Sending ${data.length} bytes of data in chunks of ${this.mtu} bytes...`)
         for (const chunk of this.chunkify(data)) {
-                // await this.print_characteristic!.writeValueWithoutResponse(Buffer.from(chunk))
+                await this.print_characteristic!.writeValueWithoutResponse(Buffer.from(chunk))
                 await sleep(this.WAIT_AFTER_EACH_CHUNK_MS)
             }
         return
