@@ -11,8 +11,8 @@ async function getBitmapArray(image: Jimp): Promise<Uint8Array> {
     for (let r = 0; r < image.bitmap.height; r++) {
         for (let col = 0; col < image.bitmap.width; col++) {
             if (buf[index] > 127) {
-                await fs.appendFile('bin.txt', "1, ")
-                bitmapArray.push(1)
+                await fs.appendFile('bin.txt', "255, ")
+                bitmapArray.push(255)
             } else {
                 await fs.appendFile('bin.txt', "0, ")
                 bitmapArray.push(0)
@@ -58,9 +58,9 @@ export class PrinterData {
         // Convert image to a monochrome bitmap and store in data
         await image.grayscale()
         // Resize 
-        await image.resize(PRINT_WIDTH/8, Jimp.AUTO)
+        await image.resize(PRINT_WIDTH / 8, 400)
         // invert
-        // await image.invert()
+        await image.invert()
         await image.write('myimg.png')
         const binarized = await getBitmapArray(image)
 

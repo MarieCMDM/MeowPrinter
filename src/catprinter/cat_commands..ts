@@ -1,16 +1,3 @@
-
-// No rights reserved to this file
-import * as ble from 'node-ble'
-import debug_lib, {Debugger} from 'debug';
-
-// Wait time after sending each chunk of data through BLE.
-const WAIT_AFTER_EACH_CHUNK_MS = 20
-
-// This is a hacky solution so we don't terminate the BLE connection to the printer
-// while it's still printing. A better solution is to subscribe to the RX characteristic
-// and listen for printer events, so we know exactly when the printing is finished.
-const WAIT_AFTER_DATA_SENT_MS = 20000
-
 const crc8_table = [
     0x00, 0x07, 0x0e, 0x09, 0x1c, 0x1b, 0x12, 0x15, 0x38, 0x3f, 0x36, 0x31,
     0x24, 0x23, 0x2a, 0x2d, 0x70, 0x77, 0x7e, 0x79, 0x6c, 0x6b, 0x62, 0x65,
@@ -45,9 +32,10 @@ function crc8(data: Uint8Array) {
 }
 
 function reverseBits(i: number) {
-    i = ((i & 0b10101010) >> 1) | ((i & 0b01010101) << 1);
-    i = ((i & 0b11001100) >> 2) | ((i & 0b00110011) << 2);
-    return ((i & 0b11110000) >> 4) | ((i & 0b00001111) << 4);
+    // i = ((i & 0b10101010) >> 1) | ((i & 0b01010101) << 1);
+    // i = ((i & 0b11001100) >> 2) | ((i & 0b00110011) << 2);
+    // return ((i & 0b11110000) >> 4) | ((i & 0b00001111) << 4);
+    return i
 }
 
 function bytes(i: number, length?: number, big_endian?: boolean) {
@@ -163,22 +151,5 @@ export abstract class Commander {
 
     setEnergy(value: number) {
         return this.send(this.makeCommand(Command.Energy, bytes(value, 2)))
-    }
-
-    async prepare(speed: number, energy: number) {
-        await this.getDeviceState()
-        await this.setDpi()
-        await this.setSpeed(speed)
-        await this.setEnergy(energy)
-        await this.applyEnergy()
-        await this.updateDevice()
-        await this.startLattice()
-    }
-
-    async finish(extra_feed: number) {
-        await this.endLattice()
-        await this.setSpeed(8)
-        await this.feedPaper(extra_feed)
-        await this.getDeviceState()
     }
 }

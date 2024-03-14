@@ -22,20 +22,22 @@ export enum StateFlag {
     pause = 1 << 4,
     busy = 0x80,
 }
+
 const {bluetooth, destroy} = ble.createBluetooth()
 
 const sleep = (ms: number) => new Promise(accept => setTimeout(accept, ms));
 
 export class CatPrinter extends Commander {
-    public debugger: Debugger
-    public device: ble.Device | undefined
-    public print_characteristic: ble.GattCharacteristic | undefined
-    public notify_characteristic: ble.GattCharacteristic | undefined
+    private debugger: Debugger
+    private device: ble.Device | undefined
+    private print_characteristic: ble.GattCharacteristic | undefined
+    private notify_characteristic: ble.GattCharacteristic | undefined
     private PRINT_WIDTH = 384
     private PRINT_CHARACTERISTIC = "0000ae01-0000-1000-8000-00805f9b34fb"
     private NOTIFY_CHARACTERISTIC = "0000ae02-0000-1000-8000-00805f9b34fb"
     private  WAIT_AFTER_EACH_CHUNK_MS = 20
     private  WAIT_AFTER_DATA_SENT_MS = 20000
+    private mtu: number = 200
 
     private constructor() {
         super()
@@ -113,14 +115,13 @@ export class CatPrinter extends Commander {
     }
 
     private  async printImage(printer_data: PrinterData): Promise<void> {
-        await fs.writeFile('print.txt', '[')
-        // flip(data.data, data.width, data.height, self.flip_h, self.flip_v, overwrite=True)
+        await fs.writeFile('print.txt', '')
         await this.prepare(34, 48000)
         // TODO: consider compression on new devices
         const rows = await printer_data.read(Math.floor(this.PRINT_WIDTH / 8))
-        for (let chunk of rows) {
-            await fs.appendFile('print.txt', `${chunk} \n`)
-            this.drawBitmap(chunk)
+        for (let row of rows) {
+            await fs.appendFile('print.txt', `${row} \n`)
+            this.drawBitmap(row)
         }
         this.finish(100)
     }
@@ -152,29 +153,38 @@ export class CatPrinter extends Commander {
     }
 
     async send(data: Uint8Array): Promise<void> {
-        this.debugger(`⏳ Sending ${data.length} bytes of data...`)
-        await this.print_characteristic!.writeValueWithoutResponse(Buffer.from(data))
-        await sleep(this.WAIT_AFTER_EACH_CHUNK_MS)
+        this.debugger(`⏳ Sending ${data.length} bytes of data in chunks of ${this.mtu} bytes...`)
+        for (const chunk of this.chunkify(data)) {
+                // await this.print_characteristic!.writeValueWithoutResponse(Buffer.from(chunk))
+                await sleep(this.WAIT_AFTER_EACH_CHUNK_MS)
+            }
         return
-    }
-    // async send(data: Uint8Array): Promise<void> {
-    //     const chunk_size = 20
-    //     this.debugger(`⏳ Sending ${data.length} bytes of data in chunks of ${chunk_size} bytes...`)
-        
-    //     for (const chunk of (this.chunkify(data, chunk_size))) {
-    //         await this.print_characteristic!.writeValueWithoutResponse(Buffer.from(chunk))
-    //         await sleep(this.WAIT_AFTER_EACH_CHUNK_MS)
-    //     }
-    //     // this.debugger(`✅ Done. Waiting ${WAIT_AFTER_DATA_SENT_MS}s before disconnecting...`)
-    //     // await sleep(WAIT_AFTER_DATA_SENT_MS)
-    //     return
-    // }
+    }  
 
-    // private chunkify(data: Uint8Array, chunk_size: number): Uint8Array[] {
-    //     const chunks: Uint8Array[] = []
-    //     for (let i = 0; i < data.length; i += chunk_size) {
-    //         chunks.push(data.slice(i, i + chunk_size))
-    //     }
-    //     return chunks
-    // }
+    private chunkify(data: Uint8Array): Uint8Array[] {
+        const chunks: Uint8Array[] = []
+        for (let i = 0; i < data.length; i += this.mtu) {
+            chunks.push(data.slice(i, i + this.mtu))
+        }
+        return chunks
+    }
+
+    private async prepare(speed: number, energy: number) {
+        await this.getDeviceState()
+        await this.setDpi()
+        await this.setSpeed(speed)
+        await this.setEnergy(energy)
+        await this.applyEnergy()
+        await this.updateDevice()
+        // await this.flush()
+        await this.startLattice()
+    }
+
+    private async finish(extra_feed: number) {
+        await this.endLattice()
+        await this.setSpeed(8)
+        await this.feedPaper(extra_feed)
+        await this.getDeviceState()
+        // await this.flush()
+    }
 }
