@@ -1,4 +1,7 @@
-const crc8_table = [
+/**
+ * Checksum table
+ */
+const checksum_table = [
     0x00, 0x07, 0x0e, 0x09, 0x1c, 0x1b, 0x12, 0x15, 0x38, 0x3f, 0x36, 0x31,
     0x24, 0x23, 0x2a, 0x2d, 0x70, 0x77, 0x7e, 0x79, 0x6c, 0x6b, 0x62, 0x65,
     0x48, 0x4f, 0x46, 0x41, 0x54, 0x53, 0x5a, 0x5d, 0xe0, 0xe7, 0xee, 0xe9,
@@ -24,10 +27,10 @@ const crc8_table = [
 ];
 
 
-function crc8(data: Uint8Array) {
+function calculateChecksum(data: Uint8Array) {
     let crc = 0;
     for (const byte of data)
-        crc = crc8_table[(crc ^ byte) & 0xff];
+        crc = checksum_table[(crc ^ byte) & 0xff];
     return crc & 0xff;
 }
 
@@ -86,7 +89,7 @@ export abstract class Commander {
         }
         return new Uint8Array([
             0x51, 0x78, command, type, payload.length % 0xff, payload.length / 0xff | 0,
-            ...payload, crc8(payload), 0xff
+            ...payload, calculateChecksum(payload), 0xff
         ]);
     }
 
@@ -106,7 +109,6 @@ export abstract class Commander {
 
     drawBitmap(line: Uint8Array) {
         return this.draw(line.map(reverseBits))
-        // return this.send(this.makeCommand(Command.Bitmap, line))
     }
 
     applyEnergy() {

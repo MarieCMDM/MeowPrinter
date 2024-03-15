@@ -1,7 +1,13 @@
 import Jimp from 'jimp'
+import { Font } from '@jimp/plugin-print'
 
 export const PRINT_WIDTH = 384
 
+/**
+ * compress the bitmap of the given image in a decical notation
+ * @param image Jimp image to print
+ * @returns 
+ */
 async function getBitmapArray(image: Jimp): Promise<Uint8Array> {
     const bitmapArray = []
     let buf = image.bitmap.data
@@ -40,50 +46,87 @@ async function getBitmapArray(image: Jimp): Promise<Uint8Array> {
 
 
 export class PrinterData {
-    /*
-     The image data to be used by `PrinterDriver`.
-     Optionally give an io `file` to read PBM image data from it.
-     To read the bitmap data, simply do `io` operation with attribute `data`
-     */
+    public width: number = 384 
+    public data_width: number
+    public data: Uint8Array
 
-    buffer = 4 * 1024 * 1024
-    width: number    // 'Constant width'
-    data_width: number    // 'Amount of data bytes per line'
-    height: number    // 'Total height of bitmap data'
-    data: Uint8Array    // 'Monochrome bitmap data `io`, of size `width * height // 8`'
-    pages: []    // Height of every page in a `list`
-    max_size: number    // 'Max size of `data`'
-    max_height: number
-    full: boolean    // 'Whether the data is full (i.e. have reached max size)'
-
-    private constructor(width: number, fileBuffer: Uint8Array, max_size = 64 * 1024 * 1024) {
-        this.width = width
-        this.data_width = Math.floor(width / 8)
-        this.height = 0
-        this.max_size = max_size
-        this.max_height = Math.floor(max_size / this.data_width)
-        this.full = false
+    private constructor(fileBuffer: Uint8Array) {
+        this.data_width = Math.floor(this.width / 8)
         this.data = fileBuffer
-        this.pages = []
     }
 
-    static async loadImage(file_path: string): Promise<PrinterData> {
-        const image: Jimp = await Jimp.read(file_path)
+    /**
+     * load an image from path or remote url
+     * @param source file path or remote url
+     * @param optional //TODO 
+     * @returns 
+     */
+    static async loadImage(source: string, optional?: {}): Promise<PrinterData> {
+        const image: Jimp = await Jimp.read(source)
+        return new PrinterData(await this.prepareImage(image))
+    }
+
+     /**
+     * create a new image containing the given text, ot will automatically go newline 
+     * @param text the text to print
+     * @param font_size size of the font
+     * @param optional //TODO 
+     * @returns 
+     */
+    static async drawText(text: string, font_size:number, optional?: {}): Promise<PrinterData> {    
+        const font: Font = await this.getFontBySize(font_size)
+        const width = PRINT_WIDTH
+        const backgroundColor = 0xFFFFFFFF 
+        const lineHeight = Jimp.measureTextHeight(font, "H", PRINT_WIDTH)
+        const textHeight = Jimp.measureTextHeight(font, text, PRINT_WIDTH) + lineHeight
+        const image = await new Jimp(width, textHeight, backgroundColor)
+        image.print(font, 0, 0, { text, alignmentX: Jimp.HORIZONTAL_ALIGN_LEFT, alignmentY: Jimp.VERTICAL_ALIGN_TOP }, PRINT_WIDTH)
+        return new PrinterData(await this.prepareImage(image))
+    }
+
+    /**
+     * load the correct font by the given size
+     * @param size size in px of the font
+     * @returns 
+     */
+    private static async getFontBySize(size: number): Promise<Font> {
+        if (size <= 8) {
+            return await Jimp.loadFont(Jimp.FONT_SANS_8_BLACK)
+        } else if (size <= 10) {
+            return await Jimp.loadFont(Jimp.FONT_SANS_10_BLACK)
+        } else if (size <= 12) {
+            return await Jimp.loadFont(Jimp.FONT_SANS_12_BLACK)
+        } else if (size <= 14) {
+            return await Jimp.loadFont(Jimp.FONT_SANS_14_BLACK)
+        } else if (size <= 16) {
+            return await Jimp.loadFont(Jimp.FONT_SANS_16_BLACK)
+        } else if (size <= 32) {
+            return await Jimp.loadFont(Jimp.FONT_SANS_32_BLACK)
+        } else if (size <= 64) {
+            return await Jimp.loadFont(Jimp.FONT_SANS_64_BLACK)
+        } else {
+            return await Jimp.loadFont(Jimp.FONT_SANS_128_BLACK)
+        } 
+    }
+
+    /**
+     * prepare th image to be printed, it will grayscale it, resize in a printer accettable dimension
+     * and invert the colors, than it will calculate the bitmap 
+     * @param image Jimp image 
+     * @returns 
+     */
+    private static async prepareImage(image: Jimp): Promise<Uint8Array> {
         const factor: number = PRINT_WIDTH / image.bitmap.width 
-        // Convert image to a monochrome bitmap and store in data
-        await image.grayscale()
-        // Resize 
         await image.resize(PRINT_WIDTH, image.bitmap.height * factor)
-        // invert
         await image.invert()
-        await image.write('myimg.png')
-
-        const binarized = await getBitmapArray(image)
-
-        return new PrinterData(image.bitmap.width, binarized)
+        return await getBitmapArray(image)
     }
 
-    *read(length = -1) {
+    /**
+     * return the bitmap data of the image in ammissible evices packege lenght slices
+     * @param length 
+     */
+    public *read(length = -1) {
         let position = 0;
         while (position < this.data.length) {
             const chunkLength = length === -1 ? this.data.length : Math.min(length, this.data.length - position);
@@ -91,34 +134,4 @@ export class PrinterData {
             position += chunkLength;
         }
     }
-
-    static async drawText(text: string): Promise<PrinterData> {
-        const width = PRINT_WIDTH
-        const backgroundColor = 0xFFFFFFFF 
-
-        // Set font properties (you can load custom fonts as well)
-        const font = await Jimp.loadFont(Jimp.FONT_SANS_32_BLACK)
-        const textHeight = Jimp.measureTextHeight(font, text, PRINT_WIDTH)
-
-        const image = await new Jimp(width, textHeight, backgroundColor)
-
-        // Print the text on the image
-        const x = 10
-        const y = 10
-        image.print(font, x, y, { text, alignmentX: Jimp.HORIZONTAL_ALIGN_LEFT })
-
-        const factor: number = PRINT_WIDTH / image.bitmap.width 
-        await image.resize(PRINT_WIDTH, image.bitmap.height * factor)
-        // invert
-        await image.invert()
-        await image.write('myimg.png')
-
-        const binarized = await getBitmapArray(image)
-
-        // Save the image to the specified output path
-        // await image.writeAsync('./textimg.png')
-
-        return new PrinterData(image.bitmap.width, binarized)
-    }
-
 }

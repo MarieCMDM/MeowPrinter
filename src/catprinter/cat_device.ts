@@ -1,9 +1,7 @@
-import * as ble from 'node-ble'
 import { PrinterData } from "./cat_image";
 import debug_lib, {Debugger} from 'debug';
 import { Commander } from './cat_commands.';
-
-import * as fs from 'fs/promises'
+import { BluetoothAdapter } from './ble_adapter';
 
 export interface PrinterState {
     out_of_paper: number;
@@ -23,137 +21,108 @@ export enum StateFlag {
     busy = 0x80,
 }
 
-const {bluetooth, destroy} = ble.createBluetooth()
-
 const sleep = (ms: number) => new Promise(accept => setTimeout(accept, ms));
 
 export class CatPrinter extends Commander {
     private debugger: Debugger
-    private device: ble.Device | undefined
-    private print_characteristic: ble.GattCharacteristic | undefined
-    private notify_characteristic: ble.GattCharacteristic | undefined
-    private PRINT_WIDTH = 384
-    private PRINT_CHARACTERISTIC = "0000ae01-0000-1000-8000-00805f9b34fb"
-    private NOTIFY_CHARACTERISTIC = "0000ae02-0000-1000-8000-00805f9b34fb"
-    private  WAIT_AFTER_EACH_CHUNK_MS = 20
-    private  WAIT_AFTER_DATA_SENT_MS = 20000
+    private adapter: BluetoothAdapter
+    private font_size: number = 32
+    private energy: number = 65500
+    private speed: number = 34
+    private print_width = 384
+    private WAIT_AFTER_EACH_CHUNK_MS = 20
     private mtu: number = 200
 
-    private constructor() {
+    constructor(ble_adapter: BluetoothAdapter) {
         super()
+        this.adapter = ble_adapter
         this.debugger = debug_lib('cat')
     }
 
-    public async scan(address?: string, timeout_ms?: number): Promise<void> {
-        let timeout: number
-        let autodiscover: boolean
-        let notify_characteristic: ble.GattCharacteristic
-        let printer_characteristic: ble.GattCharacteristic
-        timeout_ms ? timeout = timeout_ms : timeout = 10000
-        address? autodiscover = true : autodiscover = false
-        const adapter = await bluetooth.defaultAdapter()
-
-        return new Promise<void>( async (resolve, reject) => {
-            async function on_timeout_reached() {
-                await adapter.stopDiscovery()
-                destroy()
-                reject('Unable to find printer, make sure it is turned on and in range')
-            }
-
-            const t = setTimeout(on_timeout_reached, timeout)
-            t
-
-            if (! await adapter.isDiscovering()) {
-                await adapter.startDiscovery()
-            }
-
-            if (address) {
-                this.debugger(`⏳ Looking for a BLE device with address: ${address}...`)
-                try {
-                    const device = await adapter.waitDevice(address)
-                    this.debugger('Discovered Bluetooth printer')
-                    clearTimeout(t)
-
-                    await device.connect()
-                    this.debugger('Connected to device')
-                    
-                    const gattServer = await device.gatt()
-                    const services = await gattServer.services()
-
-                    for (let service of services) {
-                        let srv = await gattServer.getPrimaryService(service)
-                        let chars = await srv.characteristics()
-
-                        for (let char of chars) {
-                            const print_char = await srv.getCharacteristic(char)
-                            if (char == this.NOTIFY_CHARACTERISTIC) {
-                                notify_characteristic = print_char
-                            }
-                            if (char == this.PRINT_CHARACTERISTIC) {
-                                printer_characteristic = print_char
-                            }
-                        }
-                    }
-                        
-                    if (((printer_characteristic != undefined) && (notify_characteristic != undefined))) {
-                        this.device = device
-                        this.print_characteristic = printer_characteristic
-                        this.notify_characteristic = notify_characteristic
-                        this.debugger(`✅ Done. Connected to ${await this.device.getAddress()}`)
-                        resolve()
-                    }
-                } catch (err) {
-                    this.debugger('Catched error: ', err)
-                    destroy()
-                    reject(err)
-                }
-            } else {
-                this.debugger(`⏳ Trying to auto-discover a printer...`)
-                //TODO       
-            }
-        })
-    }
-
-    private async print(printer_data: PrinterData): Promise<void> {
-        // await fs.writeFile('print.txt', '')
-        await this.prepare(34, 65000)
-        // TODO: consider compression on new devices
-        const rows = await printer_data.read(Math.floor(this.PRINT_WIDTH / 8))
-        for (let row of rows) {
-            // await fs.appendFile('print.txt', `${row} \n`)
-            this.drawBitmap(row)
-        }
-        this.finish(100)
-    }
-
+    /**
+     * Print an image loaded from local path or remote url
+     * @param path location in filesystem or remote url
+     * @returns 
+     */
     public async printImage(path: string): Promise<void> {
         const image: PrinterData = await PrinterData.loadImage(path)
         return this.print(image)
     }
 
+    /**
+     * Print text whith default font size, to change font size use setFontSize()
+     * currently only one font is supported
+     * @param text the text to print 
+     * @returns 
+     */
     public async printText(text: string): Promise<void> {
-        const image: PrinterData = await PrinterData.drawText(text)
+        const image: PrinterData = await PrinterData.drawText(text, this.font_size)
         return this.print(image)
     }
 
+    /**
+     * Set the 'ink' strenght or how much dark the print will be
+     * @param value number from 1 to 65500 higher is darker default 65500
+     */
+    public setStrenght(value: number): void {
+        this.energy = value
+    }
 
+    /**
+     * Set feed/retract speed hight speed can cause low quality,
+     * lower is the value quicker will be the feeding
+     * @param value number  >= 4 default 30
+     */
+    public setPrintingSpeed(value: number): void {
+        this.speed = value
+    }
+
+    /**
+     * Disconnect from the bluetooth printer
+     * @returns 
+     */
     public async disconnect(): Promise<void> {
-        await sleep(this.WAIT_AFTER_DATA_SENT_MS)
-        await this.device?.disconnect()
+        //TODO await to finisch print before disconnect 
+        await this.adapter.device?.disconnect()
         this.debugger(`⏳ Disconnecting from the printer...`)
-        destroy()
+        this.adapter.destroy()
         return
     }
 
+    /**
+     * it will be private
+     * send the protocol composed message to the printer slicing it in chunks of mtu lenght if needed
+     * @param data the commad message to send
+     * @returns 
+     */
     async send(data: Uint8Array): Promise<void> {
         this.debugger(`⏳ Sending ${data.length} bytes of data in chunks of ${this.mtu} bytes...`)
         for (const chunk of this.chunkify(data)) {
-                await this.print_characteristic!.writeValueWithoutResponse(Buffer.from(chunk))
+                await this.adapter.print_characteristic!.writeValueWithoutResponse(Buffer.from(chunk))
                 await sleep(this.WAIT_AFTER_EACH_CHUNK_MS)
             }
         return
     }  
 
+    /**
+     * execute the printing stack 
+     * @param printer_data the data to print
+     */
+    private async print(printer_data: PrinterData): Promise<void> {
+        await this.prepare()
+        // TODO: consider compression on new devices
+        const rows = await printer_data.read(Math.floor(this.print_width / 8))
+        for (let row of rows) {
+            this.drawBitmap(row)
+        }
+        this.finish(100)
+    }
+
+    /**
+     * Create an array of parts of messages to send to the printer messages longher than devices' mtu will not be processed by the printer
+     * @param data 
+     * @returns 
+     */
     private chunkify(data: Uint8Array): Uint8Array[] {
         const chunks: Uint8Array[] = []
         for (let i = 0; i < data.length; i += this.mtu) {
@@ -162,22 +131,26 @@ export class CatPrinter extends Commander {
         return chunks
     }
 
-    private async prepare(speed: number, energy: number) {
+    /**
+     * Stack messages needde before sending printerData
+     */
+    private async prepare() {
         await this.getDeviceState()
         await this.setDpi()
-        await this.setSpeed(speed)
-        await this.setEnergy(energy)
+        await this.setSpeed(this.speed)
+        await this.setEnergy(this.energy)
         await this.applyEnergy()
         await this.updateDevice()
-        // await this.flush()
         await this.startLattice()
     }
 
+    /**
+     * Stack messages needed after sending printerData
+     */
     private async finish(extra_feed: number) {
         await this.endLattice()
         await this.setSpeed(8)
         await this.feedPaper(extra_feed)
         await this.getDeviceState()
-        // await this.flush()
     }
 }
