@@ -1,6 +1,5 @@
-import { CatPrinter } from "../dist/catprinter/cat_device.js"
-import { BluetoothAdapter } from "../dist/catprinter/ble_adapter.js"
-
+import { CatPrinter } from "./dist/catprinter/cat_device.js"
+import { BluetoothAdapter } from "./dist/catprinter/ble_adapter.js"
 
 const adapter = new BluetoothAdapter()
 await adapter.scan('54:5d:f8:3a:24:de', 30000)

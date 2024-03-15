@@ -35,6 +35,9 @@ export class CatPrinter extends Commander {
 
     constructor(ble_adapter: BluetoothAdapter) {
         super()
+        if (ble_adapter.device === undefined || ble_adapter.print_characteristic === undefined) {
+            throw new Error(' Ble Adapter not valid ensure you have scan for device')
+        }
         this.adapter = ble_adapter
         this.debugger = debug_lib('cat')
     }
