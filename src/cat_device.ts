@@ -2,7 +2,7 @@ import { PrinterData } from "./cat_image";
 import debug_lib, {Debugger} from 'debug';
 import { Commander } from './cat_commands';
 import { TextEncoder, CustomFonts, TextOptions } from "./text_encoder";
-import { BluetoothAdapter } from './ble_adapter';
+import { BleDevice } from './ble_adapter';
 
 export interface PrinterState {
     out_of_paper: boolean;
@@ -26,7 +26,7 @@ const sleep = (ms: number) => new Promise(accept => setTimeout(accept, ms));
 
 export class CatPrinter extends Commander {
     private debugger: Debugger
-    private adapter: BluetoothAdapter
+    private device: BleDevice
     private text_encoder: TextEncoder
     private energy: number = 65500
     private speed: number = 54
@@ -41,18 +41,18 @@ export class CatPrinter extends Commander {
                                     busy: false
                                 }
 
-    constructor(ble_adapter: BluetoothAdapter) {
+    constructor(ble_device: BleDevice) {
         super()
-        if (ble_adapter.device === undefined || ble_adapter.print_characteristic === undefined) {
-            throw new Error(' Ble Adapter not valid ensure you have scan for device')
+        if (ble_device.device === undefined || ble_device.print_characteristic === undefined) {
+            throw new Error(' Ble device not valid ensure you have scan for device')
         }
         
-        this.adapter = ble_adapter
+        this.device = ble_device
         this.debugger = debug_lib('cat')
         this.text_encoder = new TextEncoder(this.print_width)
 
-        this.adapter.notify_characteristic?.startNotifications()
-        this.adapter.notify_characteristic?.on('valuechanged', (buffer) => {
+        this.device.notify_characteristic?.startNotifications()
+        this.device.notify_characteristic?.on('valuechanged', (buffer) => {
             this.updateStatus(buffer)
         })
     }
@@ -128,9 +128,9 @@ export class CatPrinter extends Commander {
      */
     public async disconnect(): Promise<void> {
         //TODO await to finisch print before disconnect 
-        await this.adapter.device?.disconnect()
+        await this.device.device?.disconnect()
         this.debugger(`⏳ Disconnecting from the printer...`)
-        this.adapter.destroy()
+        this.device.device.disconnect()
         return
     }
 
@@ -159,7 +159,7 @@ export class CatPrinter extends Commander {
     protected async send(data: Uint8Array): Promise<void> {
         this.debugger(`⏳ Sending ${data.length} bytes of data in chunks of ${this.mtu} bytes...`)
         for (const chunk of this.chunkify(data)) {
-                await this.adapter.print_characteristic!.writeValueWithoutResponse(Buffer.from(chunk))
+                await this.device.print_characteristic!.writeValueWithoutResponse(Buffer.from(chunk))
                 await sleep(this.WAIT_AFTER_EACH_CHUNK_MS)
             }
         return

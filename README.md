@@ -12,24 +12,43 @@ npm install
 
 ## API
 `async printImage('path_or_url')`  
+print the image from the given path or url
 
-`async printText('some text here')`  
+`async printText()`  
+print the text after newText() has ben created
 
-`async drawSeparator(optional? separator height)` 
+`newText(fonts:? CustomFonts[])`  
+create new textarea to print optionally can be loades some customfonts
 
-`setStrenght(value)`
+`addText(text: string, options: TextOptions)`  
+add text to the textarea with the given TextOptions
 
-`setPrintingSpeed(value)`
+`newLine()`  
+goes new line in the textarea
 
-`setAlignment(alignment)`
+`loadFont(font: CustomFonts)`  
+load a custom font
 
-`getPrinterStatus()`
+`async drawSeparator(optional? separator height)`   
+draw a line optionalli can be specified the line deept
+ 
+`setStrenght(value)`  
+set the strength of the printing
 
-`retractPaper(lines)`
+`setPrintingSpeed(value)`  
+set the printing speed
 
-`feedPaper(lines)`
+`getPrinterStatus()`  
+get the printer status
 
-`disconnect()`
+`retractPaper(lines)`  
+retract the paper by the given amount
+
+`feedPaper(lines)`  
+feed the papaer by the given amount
+
+`disconnect()`  
+disconnect from the ble device
 
 
 ## EXAMPLE
@@ -37,13 +56,18 @@ npm install
 import { CatPrinter } from "cat_device."
 import { BluetoothAdapter } from "ble_adapter"
 
+
 const adapter = new BluetoothAdapter()
-await adapter.scan('MY_MAC_ADDRESS')
+
+const isonprinter = new CatPrinter(await adapter.scan('MY_MAC_ADDRESS', 30000))
 
 const printer = new CatPrinter(adapter)
 
 await printer.printImage('./assets/catprinter.jpg')
-await printer.printText('Some text here, some other will go in new line')
+printer.newText()
+printer.addText('Hello, World', {font: '', font_size: 24, bold: true, alignment: 'center' })
+printer.newLine()
+await printer.printText()
 await printer.disconnect()
 ```
 
