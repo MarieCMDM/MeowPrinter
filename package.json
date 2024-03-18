@@ -38,11 +38,8 @@
     "typescript": "^5.3.3"
   },
   "dependencies": {
-    "@node-escpos/core": "^0.5.0",
-    "@node-escpos/network-adapter": "^0.0.1",
-    "@types/jimp": "^0.2.28",
+    "canvas": "^2.11.2",
     "debug": "^4.3.4",
-    "jimp": "^0.22.12",
     "node-ble": "^1.10.0"
   }
 }

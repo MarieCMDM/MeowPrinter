@@ -1,15 +1,16 @@
 import { PrinterData } from "./cat_image";
 import debug_lib, {Debugger} from 'debug';
-import { Commander } from './cat_commands.';
+import { Commander } from './cat_commands';
+import { TextEncoder, CustomFonts, TextOptions } from "./text_encoder";
 import { BluetoothAdapter } from './ble_adapter';
 
 export interface PrinterState {
-    out_of_paper: number;
-    cover: number;
-    overheat: number;
-    low_power: number;
-    pause: number;
-    busy: number;
+    out_of_paper: boolean;
+    cover: boolean;
+    overheat: boolean;
+    low_power: boolean;
+    pause: boolean;
+    busy: boolean;
 }
 
 export enum StateFlag {
@@ -26,20 +27,34 @@ const sleep = (ms: number) => new Promise(accept => setTimeout(accept, ms));
 export class CatPrinter extends Commander {
     private debugger: Debugger
     private adapter: BluetoothAdapter
-    private font_size: number = 32
+    private text_encoder: TextEncoder
     private energy: number = 65500
-    private speed: number = 34
+    private speed: number = 54
     private print_width = 384
-    private WAIT_AFTER_EACH_CHUNK_MS = 20
+    private WAIT_AFTER_EACH_CHUNK_MS = 30
     private mtu: number = 200
+    private state: PrinterState = { out_of_paper: false,
+                                    cover: false,
+                                    overheat: false,
+                                    low_power: false,
+                                    pause: false,
+                                    busy: false
+                                }
 
     constructor(ble_adapter: BluetoothAdapter) {
         super()
         if (ble_adapter.device === undefined || ble_adapter.print_characteristic === undefined) {
             throw new Error(' Ble Adapter not valid ensure you have scan for device')
         }
+        
         this.adapter = ble_adapter
         this.debugger = debug_lib('cat')
+        this.text_encoder = new TextEncoder(this.print_width)
+
+        this.adapter.notify_characteristic?.startNotifications()
+        this.adapter.notify_characteristic?.on('valuechanged', (buffer) => {
+            this.updateStatus(buffer)
+        })
     }
 
     /**
@@ -58,9 +73,28 @@ export class CatPrinter extends Commander {
      * @param text the text to print 
      * @returns 
      */
-    public async printText(text: string): Promise<void> {
-        const image: PrinterData = await PrinterData.drawText(text, this.font_size)
+    public async printText(): Promise<void> {
+        const image: PrinterData = await PrinterData.drawText(this.text_encoder.getImage())
         return this.print(image)
+    }
+
+    /**
+     * Draw a line
+     * @param thick thickness in px of the line
+     * @returns 
+     */
+    public async drawSeparator(thick?: number): Promise<void> {
+        let line_thick: number
+        thick ? line_thick = thick : line_thick = 1 
+        const line: Uint8Array = new Uint8Array(48)
+        line.fill(255, 0, 47)
+        await this.prepare()
+        while (line_thick > 0) {
+            await this.drawBitmap(line)
+            line_thick--
+        }
+        await this.finish(1)
+        return
     }
 
     /**
@@ -74,10 +108,18 @@ export class CatPrinter extends Commander {
     /**
      * Set feed/retract speed hight speed can cause low quality,
      * lower is the value quicker will be the feeding
-     * @param value number  >= 4 default 30
+     * @param value number  >= 4 default 34
      */
     public setPrintingSpeed(value: number): void {
         this.speed = value
+    }
+
+    /**
+     * get device Status
+     * @returns PrinterState
+     */
+    public getPrinterStatus(): PrinterState {
+        return this.state
     }
 
     /**
@@ -92,13 +134,29 @@ export class CatPrinter extends Commander {
         return
     }
 
+    public newText(fonts?: CustomFonts[]): void { 
+        this.text_encoder.newText(fonts)
+    }
+
+    public addText(text: string, options: TextOptions): void {
+        this.text_encoder.addText(text, options)
+    }
+
+    public newLine(): void {
+        this.text_encoder.newLine()
+    }
+
+    public loadFont(font: CustomFonts): void {
+        this.text_encoder.loadFont(font)
+    }
+
     /**
      * it will be private
      * send the protocol composed message to the printer slicing it in chunks of mtu lenght if needed
      * @param data the commad message to send
      * @returns 
      */
-    async send(data: Uint8Array): Promise<void> {
+    protected async send(data: Uint8Array): Promise<void> {
         this.debugger(`⏳ Sending ${data.length} bytes of data in chunks of ${this.mtu} bytes...`)
         for (const chunk of this.chunkify(data)) {
                 await this.adapter.print_characteristic!.writeValueWithoutResponse(Buffer.from(chunk))
@@ -118,7 +176,7 @@ export class CatPrinter extends Commander {
         for (let row of rows) {
             this.drawBitmap(row)
         }
-        this.finish(100)
+        this.finish(1)
     }
 
     /**
@@ -155,5 +213,19 @@ export class CatPrinter extends Commander {
         await this.setSpeed(8)
         await this.feedPaper(extra_feed)
         await this.getDeviceState()
+    }
+
+    private updateStatus(data: Buffer) {
+        const state = data[6]
+        this.state = {
+            out_of_paper: (state & StateFlag.out_of_paper) == 0 ? false : true,
+            cover: (state & StateFlag.cover) == 0 ? false : true,
+            overheat: (state & StateFlag.overheat) == 0 ? false : true,
+            low_power: (state & StateFlag.low_power) == 0 ? false : true,
+            pause: (state & StateFlag.pause) == 0 ? false : true,
+            busy: (state & StateFlag.busy) == 0 ? false : true
+        }
+
+        console.log(this.state)
     }
 }

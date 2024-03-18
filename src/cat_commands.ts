@@ -80,7 +80,7 @@ export abstract class Commander {
 
     constructor() {}
 
-    abstract send(data: Uint8Array): Promise<void>
+    protected abstract send(data: Uint8Array): Promise<void>
 
     private makeCommand(command: Command, payload: Uint8Array, type: CommandType = CommandType.Transfer) {
         const payload_size = payload.length
@@ -93,49 +93,49 @@ export abstract class Commander {
         ]);
     }
 
-    start_printing()  {
+    protected start_printing()  {
         // Start printing
         this.send(new Uint8Array([0x51, 0x78, 0xa3, 0x00, 0x01, 0x00, 0x00, 0x00, 0xff]) )
     }
 
-    start_printing_new() {
+    protected start_printing_new() {
         // Start printing on newer printers
         this.send(new Uint8Array([0x12, 0x51, 0x78, 0xa3, 0x00, 0x01, 0x00, 0x00, 0x00, 0xff]) )
     }
 
-    draw(line: Uint8Array) {
+    private draw(line: Uint8Array) {
         return this.send(this.makeCommand(Command.Bitmap, line))
     }
 
-    drawBitmap(line: Uint8Array) {
+    protected drawBitmap(line: Uint8Array) {
         return this.draw(line.map(reverseBits))
     }
 
-    applyEnergy() {
+    protected applyEnergy() {
         return this.send(this.makeCommand(Command.ApplyEnergy, bytes(0x01)))
     }
 
-    getDeviceState() {
+    protected getDeviceState() {
         return this.send(this.makeCommand(Command.GetDeviceState, bytes(0x00)))
     }
 
-    getDeviceInfo() {
+    protected getDeviceInfo() {
         return this.send(this.makeCommand(Command.GetDeviceInfo, bytes(0x00)))
     }
 
-    updateDevice() {
+    protected updateDevice() {
         return this.send(this.makeCommand(Command.UpdateDevice, bytes(0x00)))
     }
 
-    setDpi(_dpi = 200) {
+    protected setDpi(_dpi = 200) {
         return this.send(this.makeCommand(Command.SetDpi, bytes(50)))
     }
 
-    startLattice() {
+    protected startLattice() {
         return this.send(this.makeCommand(Command.Lattice, new Uint8Array([0xaa, 0x55, 0x17, 0x38, 0x44, 0x5f, 0x5f, 0x5f, 0x44, 0x38, 0x2c])))
     }
 
-    endLattice() {
+    protected endLattice() {
         return this.send(this.makeCommand(Command.Lattice, new Uint8Array([0xaa, 0x55, 0x17, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x17])))
     }
 
@@ -147,11 +147,11 @@ export abstract class Commander {
         return this.send(this.makeCommand(Command.Feed, bytes(points, 2)))
     }
 
-    setSpeed(value: number) {
+    protected setSpeed(value: number) {
         return this.send(this.makeCommand(Command.Speed, bytes(value)))
     }
 
-    setEnergy(value: number) {
+    protected setEnergy(value: number) {
         return this.send(this.makeCommand(Command.Energy, bytes(value, 2)))
     }
 }
