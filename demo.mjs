@@ -3,8 +3,8 @@ import { BluetoothAdapter } from "./dist/ble_adapter.js"
 
 const adapter = new BluetoothAdapter()
 
-const printer = new CatPrinter(await adapter.scan('54:5d:f8:3a:24:de', 30000))
-// const myprinter = new CatPrinter(await adapter.scan('cc:10:24:22:f6:86', 30000))
+// const printer = new CatPrinter(await adapter.scan('54:5d:f8:3a:24:de', 30000))
+const printer = new CatPrinter(await adapter.scan('cc:10:24:22:f6:86', 30000))
 
 // for (let printer of [isonprinter, myprinter]) {
     // printer.loadFont({path: './assets/Pacifico.ttf', name: 'Pacifico'})
@@ -29,7 +29,6 @@ const printer = new CatPrinter(await adapter.scan('54:5d:f8:3a:24:de', 30000))
 
     await printer.printImage('./assets/catprinter.jpg')
 
-    await printer.feedPaper(150)
     await printer.feedPaper(150)
 
     await printer.disconnect()

@@ -1,7 +1,7 @@
 {
-  "name": "plint",
+  "name": "meow-printer",
   "version": "1.0.0",
-  "description": "rch print rt tcp interface",
+  "description": "catprinter driver for nodejs",
   "main": "dist/index.js",
   "files": [
     "dist/**/*.js",
@@ -22,9 +22,7 @@
     "cat-printer",
     "bluetooth",
     "catprinter",
-    "thermal-printers",
-    "escpos",
-    "esc-pos"
+    "thermal-printers"
   ],
   "author": "Mattia Castellani",
   "license": "ISC",
